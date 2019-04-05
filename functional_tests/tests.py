@@ -1,7 +1,11 @@
 from django.test import LiveServerTestCase
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import WebDriverException
 import time
+
+
+MAX_WAIT = 10
 
 
 
@@ -17,13 +21,21 @@ class NewVisitorTest(LiveServerTestCase):
         self.browser.quit()
 
 
-    def check_for_row_in_list_table(self, row_text):
-        table = self.browser.find_element_by_id('id_list_table')
-        rows = table.find_elements_by_tag_name('tr')
-        self.assertIn(row_text, [row.text for row in rows])
+    def wait_for_row_in_list_table(self, row_text):
+        start_time = time.time()
+        while True:
+            try:
+                table = self.browser.find_element_by_id('id_list_table')
+                rows = table.find_elements_by_tag_name('tr')
+                self.assertIn(row_text, [row.text for row in rows])
+                return
+            except (AssertionError, WebDriverException) as e:
+                if time.time() - start_time > MAX_WAIT:
+                    raise e
+                time.sleep(0.5)
 
 
-    def test_can_start_a_list_and_retrieve_it_later(self):
+    def test_can_start_a_list_for_one_user(self):
         # Sandra has heard about this wicked new online to-do app, and
         # she goes to check out it's homepage.
         self.browser.get(self.live_server_url)
@@ -48,8 +60,7 @@ class NewVisitorTest(LiveServerTestCase):
         # When she hits enter, the page updates. The page now lists "1: Buy himalayan salt"
         # as an item on her to-do list
         inputbox.send_keys(Keys.ENTER)
-        time.sleep(1)
-        self.check_for_row_in_list_table('1: Buy himalayan salt')
+        self.wait_for_row_in_list_table('1: Buy himalayan salt')
 
         # There is still a text box inviting her to add another to-do item. She types
         # "Download the audiobooks - 'The Amazing Benefits of Himalayan Salt' and 'Himalayan
@@ -58,16 +69,54 @@ class NewVisitorTest(LiveServerTestCase):
         inputbox = self.browser.find_element_by_id('id_new_item')
         inputbox.send_keys("Download the audiobooks - 'The Amazing Benefits of Himalayan Salt' and 'Himalayan Salt: Yogi Secret or Capitalist Scam'")
         inputbox.send_keys(Keys.ENTER)
-        time.sleep(1)
 
         # The page updates and shows both items on her list
-        self.check_for_row_in_list_table('1: Buy himalayan salt')
-        self.check_for_row_in_list_table('2: Download the audiobooks - \'The Amazing Benefits of Himalayan Salt\' and \'Himalayan Salt: Yogi Secret or Capitalist Scam\'')
-
-        # Sandra wonders whether the site will remember her list. Then she notices that the site has
-        # generated a unique URL for her -- there is some explanatory text to that effect.
-
-        # She visits that URL and... her to-do list is still there!
+        self.wait_for_row_in_list_table('1: Buy himalayan salt')
+        self.wait_for_row_in_list_table('2: Download the audiobooks - \'The Amazing Benefits of Himalayan Salt\' and \'Himalayan Salt: Yogi Secret or Capitalist Scam\'')
 
         # Satisfied, she begins to make herself a bath.
-        self.fail("Finish the test!")
+
+
+    def test_multiple_users_can_start_lists_at_different_urls(self):
+        # Sandra starts a new to-do list
+        self.browser.get(self.live_server_url)
+        inputbox = self.browser.find_element_by_id('id_new_item')
+        inputbox.send_keys('Buy himalayan salt')
+        inputbox.send_keys(Keys.ENTER)
+        self.wait_for_row_in_list_table('1: Buy himalayan salt')
+
+        # She notices that her list has a unique url
+        sandra_list_url = self.browser.current_url
+        self.assertRegex(sandra_list_url, '/lists/.+')
+
+        # Now a new user, Georgio, comes along to the site
+
+        ## We use a new browser session to assure that no information
+        ## of Sandras is coming through from cookies etc
+        self.browser.quit()
+        self.browser = webdriver.Firefox()
+
+        # Georgio visits the home page. There is no sign of Sandra's list
+        self.browser.get(self.live_server_url)
+        page_text = self.browser.find_element_by_tag_name('body').text
+        self.assertNotIn('Buy himalayan salt', page_text)
+        self.assertNotIn('2: Download the audiobooks - \'The Amazing Benefits of Himalayan Salt\' and \'Himalayan Salt: Yogi Secret or Capitalist Scam\'', page_text)
+
+        # Georgio starts a new list by entering a new item. He
+        # is less interesting than Sandra
+        inputbox = self.browser.find_element_by_id('id_new_item')
+        inputbox.send_keys('Buy milk')
+        inputbox.send_keys(Keys.ENTER)
+        self.wait_for_row_in_list_table('1: Buy milk')
+
+        # Georgio also gets his own unique url
+        georgio_list_url = self.browser.current_url
+        self.assertRegex(georgio_list_url, '/lists/.+')
+        self.assertNotEqual(georgio_list_url, sandra_list_url)
+
+        # Again, there is no trace of Sandra's list
+        page_text = self.browser.find_element_by_tag_name('body').text
+        self.assertNotIn('Buy himalayan salt', page_text)
+        self.assertIn('Buy milk', page_text)
+
+        # Satisfied, Georgio takes a nap
