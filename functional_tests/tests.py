@@ -1,12 +1,12 @@
+from django.test import LiveServerTestCase
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 import time
-import unittest
 
 
 
 
-class NewVisitorTest(unittest.TestCase):
+class NewVisitorTest(LiveServerTestCase):
 
 
     def setUp(self):
@@ -26,7 +26,7 @@ class NewVisitorTest(unittest.TestCase):
     def test_can_start_a_list_and_retrieve_it_later(self):
         # Sandra has heard about this wicked new online to-do app, and
         # she goes to check out it's homepage.
-        self.browser.get('http://localhost:8000')
+        self.browser.get(self.live_server_url)
 
         # She notices that the header and page title mention something about
         # to-do lists, so she must be in the right spot.
@@ -71,7 +71,3 @@ class NewVisitorTest(unittest.TestCase):
 
         # Satisfied, she begins to make herself a bath.
         self.fail("Finish the test!")
-
-
-if __name__ == '__main__':
-    unittest.main(warnings='ignore')
