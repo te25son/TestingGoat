@@ -26,7 +26,7 @@ SECRET_KEY = 'z&6)h61g+b%)_r8&mhx%h67j!gw&xh(uzg%jt6xnsezq)mhfdw'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['staging.superliststdd.site',]
 
 
 # Application definition
